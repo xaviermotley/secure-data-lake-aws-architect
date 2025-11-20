@@ -1,0 +1,48 @@
+name: IaC CI/CD
+
+on:
+  pull_request:
+    paths:
+      - 'iac/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'iac/**'
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.4'
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./iac
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        working-directory: ./iac
+      - name: Upload Plan
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan
+          path: ./iac/tfplan
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12.1592.0
+        with:
+          directory: ./iac
+      - name: Run Tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          directory: ./iac
+      - name: Conftest OPA Policy
+        uses: instrumenta/conftest-action@v0.3.0
+        with:
+          files: ./iac
+      - name: Terraform Apply
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        run: terraform apply -auto-approve tfplan
+        working-directory: ./iac
